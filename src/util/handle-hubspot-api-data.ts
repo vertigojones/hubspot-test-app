@@ -35,8 +35,20 @@ export const handleHubspotApiData = async () => {
     const companyRoleCounts: Record<string, number> = {}
     const contactCompanyRoleCounts: Record<string, number> = {}
 
-    // 3. Populate counts from the existing associations
-    // - Iterate through existing associations and update the tracking structures.
+    // Populate counts from the existing associations
+    existingAssociations.forEach(
+      ({ companyId, contactId, role }: Association) => {
+        const companyRoleKey = `${companyId}-${role}`
+        const contactCompanyKey = `${contactId}-${companyId}`
+
+        companyRoleCounts[companyRoleKey] =
+          (companyRoleCounts[companyRoleKey] || 0) + 1
+        contactCompanyRoleCounts[contactCompanyKey] =
+          (contactCompanyRoleCounts[contactCompanyKey] || 0) + 1
+      }
+    )
+    console.log("Company Role Counts:", companyRoleCounts)
+    console.log("Contact Company Role Counts:", contactCompanyRoleCounts)
 
     // 4. Validate new associations
     // - For each new association:
