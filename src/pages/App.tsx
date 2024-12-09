@@ -10,8 +10,8 @@ const ApiPageContainer = styled.div`
 
 const ApiPage: FC<ApiPageProps> = () => {
   useEffect(() => {
-    handleHubspotApiData() // Call the function to fetch and log data
-  }, []) // Empty dependency array ensures this runs on component mount
+    handleHubspotApiData() // Fetch and log data
+  }, [])
 
   return <ApiPageContainer>Hello World</ApiPageContainer>
 }
