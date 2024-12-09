@@ -1,7 +1,7 @@
 import axios from "axios"
 
-const MAX_COMPANY_ROLE_LIMIT = 5 // Max roles per company-role pair
-const MAX_CONTACT_COMPANY_ROLE_LIMIT = 2 // Max roles per contact-company pair
+const MAX_COMPANY_ROLE_LIMIT = 5
+const MAX_CONTACT_COMPANY_ROLE_LIMIT = 2
 
 interface Association {
   companyId: number
@@ -23,19 +23,18 @@ export const handleHubspotApiData = async () => {
   }
 
   try {
-    // Fetch data
-    const { data } = await axios.get(
-      `https://candidate.hubteam.com/candidateTest/v3/problem/dataset?userKey=${userKey}`
+    // Fetch the test dataset
+    const testDataset = await axios.get(
+      `https://candidate.hubteam.com/candidateTest/v3/problem/test-dataset?userKey=${userKey}`
     )
+    console.log("Test Dataset:", testDataset.data)
 
-    // Deconstruct the two endpoint arrays
-    const { existingAssociations, newAssociations } = data
+    const { existingAssociations, newAssociations } = testDataset.data
 
-    // Track counts for limits
     const companyRoleCounts: Record<string, number> = {}
-    const contactCompanyRoleCounts: Record<string, number> = {}
+    const contactCompanyCounts: Record<string, number> = {}
 
-    // Populate counts from the existing associations
+    // Initialize counts with existing associations
     existingAssociations.forEach(
       ({ companyId, contactId, role }: Association) => {
         const companyRoleKey = `${companyId}-${role}`
@@ -43,32 +42,92 @@ export const handleHubspotApiData = async () => {
 
         companyRoleCounts[companyRoleKey] =
           (companyRoleCounts[companyRoleKey] || 0) + 1
-        contactCompanyRoleCounts[contactCompanyKey] =
-          (contactCompanyRoleCounts[contactCompanyKey] || 0) + 1
+        contactCompanyCounts[contactCompanyKey] =
+          (contactCompanyCounts[contactCompanyKey] || 0) + 1
       }
     )
-    console.log("Company Role Counts:", companyRoleCounts)
-    console.log("Contact Company Role Counts:", contactCompanyRoleCounts)
 
-    // 4. Validate new associations
-    // - For each new association:
-    //   - Check if the association already exists (failureReason: "ALREADY_EXISTS").
-    //   - Check if the addition would exceed limits for:
-    //     - (companyId, role)
-    //     - (contactId, companyId)
-    //   - Classify each association as 'valid' or 'invalid' with the appropriate failure reason.
+    const validAssociations: Association[] = []
+    const invalidAssociations: (Association & { failureReason: string })[] = []
 
-    // 5. Prepare the validation result
-    // - Create an object with arrays of 'valid' and 'invalid' associations.
+    // Process new associations dynamically
+    newAssociations.forEach((association: Association) => {
+      const { companyId, contactId, role } = association
 
-    // 6. Send the validation results back to the API
-    // - Use a POST request to submit the result object.
+      const companyRoleKey = `${companyId}-${role}`
+      const contactCompanyKey = `${contactId}-${companyId}`
 
-    // 7. Log or handle the response
-    // - Log the response or handle it as needed for further processing.
+      // Check if the association already exists
+      const alreadyExists = existingAssociations.some(
+        (existing: Association) =>
+          existing.companyId === companyId &&
+          existing.contactId === contactId &&
+          existing.role === role
+      )
 
-    // Go to the pub
+      if (alreadyExists) {
+        invalidAssociations.push({
+          ...association,
+          failureReason: "ALREADY_EXISTS",
+        })
+        return
+      }
+
+      // Calculate projected counts dynamically
+      const projectedCompanyRoleCount =
+        (companyRoleCounts[companyRoleKey] || 0) + 1
+      const projectedContactCompanyCount =
+        (contactCompanyCounts[contactCompanyKey] || 0) + 1
+
+      // Validate against limits
+      if (
+        projectedCompanyRoleCount > MAX_COMPANY_ROLE_LIMIT ||
+        projectedContactCompanyCount > MAX_CONTACT_COMPANY_ROLE_LIMIT
+      ) {
+        invalidAssociations.push({
+          ...association,
+          failureReason: "WOULD_EXCEED_LIMIT",
+        })
+      } else {
+        // Update counts and classify as valid
+        companyRoleCounts[companyRoleKey] = projectedCompanyRoleCount
+        contactCompanyCounts[contactCompanyKey] = projectedContactCompanyCount
+        validAssociations.push(association)
+      }
+    })
+
+    const resultBody: ValidationResult = {
+      validAssociations,
+      invalidAssociations,
+    }
+
+    console.log(
+      "Generated Result for Test Dataset:",
+      JSON.stringify(resultBody, null, 2)
+    )
+
+    // Fetch the correct answer for comparison
+    const correctAnswer = await axios.get(
+      `https://candidate.hubteam.com/candidateTest/v3/problem/test-dataset-answer?userKey=${userKey}`
+    )
+    console.log("Correct Answer:", JSON.stringify(correctAnswer.data, null, 2))
+
+    const isEqual =
+      JSON.stringify(resultBody) === JSON.stringify(correctAnswer.data)
+    console.log("Is Generated Result Correct:", isEqual)
+
+    // Submit the results
+    const response = await axios.post(
+      `https://candidate.hubteam.com/candidateTest/v3/problem/test-result?userKey=${userKey}`,
+      resultBody
+    )
+
+    console.log("Test Result POST Response:", response.data)
   } catch (error) {
-    console.error("Error fetching data from HubSpot API:", error)
+    if (axios.isAxiosError(error)) {
+      console.error("Axios error:", error.response?.data || error.message)
+    } else {
+      console.error("Unexpected error:", error)
+    }
   }
 }
