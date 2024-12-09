@@ -33,6 +33,7 @@ export const handleHubspotApiData = async () => {
 
     const companyRoleCounts: Record<string, number> = {}
     const contactCompanyCounts: Record<string, number> = {}
+    const tempValidAssociations: Association[] = []
 
     // Initialize counts with existing associations
     existingAssociations.forEach(
@@ -49,6 +50,37 @@ export const handleHubspotApiData = async () => {
 
     const validAssociations: Association[] = []
     const invalidAssociations: (Association & { failureReason: string })[] = []
+
+    const invalidateContributingAssociations = (
+      companyId: number,
+      role: string,
+      contactId: number
+    ) => {
+      // Invalidate all temporary associations for company-role pair
+      tempValidAssociations
+        .filter(
+          (assoc) =>
+            assoc.companyId === companyId &&
+            (assoc.role === role || assoc.contactId === contactId)
+        )
+        .forEach((assoc) => {
+          invalidAssociations.push({
+            ...assoc,
+            failureReason: "WOULD_EXCEED_LIMIT",
+          })
+        })
+
+      // Remove invalidated associations from tempValidAssociations
+      tempValidAssociations.splice(
+        0,
+        tempValidAssociations.length,
+        ...tempValidAssociations.filter(
+          (assoc) =>
+            assoc.companyId !== companyId ||
+            (assoc.role !== role && assoc.contactId !== contactId)
+        )
+      )
+    }
 
     // Process new associations dynamically
     newAssociations.forEach((association: Association) => {
@@ -73,17 +105,19 @@ export const handleHubspotApiData = async () => {
         return
       }
 
-      // Calculate projected counts dynamically
+      // Temporarily classify as valid and project counts
       const projectedCompanyRoleCount =
         (companyRoleCounts[companyRoleKey] || 0) + 1
       const projectedContactCompanyCount =
         (contactCompanyCounts[contactCompanyKey] || 0) + 1
 
-      // Validate against limits
       if (
         projectedCompanyRoleCount > MAX_COMPANY_ROLE_LIMIT ||
         projectedContactCompanyCount > MAX_CONTACT_COMPANY_ROLE_LIMIT
       ) {
+        // Invalidate all contributing associations for the exceeded limit
+        invalidateContributingAssociations(companyId, role, contactId)
+
         invalidAssociations.push({
           ...association,
           failureReason: "WOULD_EXCEED_LIMIT",
@@ -93,6 +127,7 @@ export const handleHubspotApiData = async () => {
         companyRoleCounts[companyRoleKey] = projectedCompanyRoleCount
         contactCompanyCounts[contactCompanyKey] = projectedContactCompanyCount
         validAssociations.push(association)
+        tempValidAssociations.push(association)
       }
     })
 
