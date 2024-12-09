@@ -23,13 +23,17 @@ export const handleHubspotApiData = async () => {
   }
 
   try {
-    // 1.Fetch data
+    // Fetch data
     const { data } = await axios.get(
       `https://candidate.hubteam.com/candidateTest/v3/problem/dataset?userKey=${userKey}`
     )
 
-    // 2. Initialise tracking structures for limits
-    // - Create structures to count associations by (companyId, role) and (contactId, companyId).
+    // Deconstruct the two endpoint arrays
+    const { existingAssociations, newAssociations } = data
+
+    // Track counts for limits
+    const companyRoleCounts: Record<string, number> = {}
+    const contactCompanyRoleCounts: Record<string, number> = {}
 
     // 3. Populate counts from the existing associations
     // - Iterate through existing associations and update the tracking structures.
