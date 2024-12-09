@@ -11,10 +11,16 @@ export const handleHubspotApiData = async () => {
   }
 
   try {
-    const response = await axios.get(
+    // Fetch data from the GET request
+    const { data } = await axios.get(
       `https://candidate.hubteam.com/candidateTest/v3/problem/dataset?userKey=${userKey}`
     )
-    console.log("HubSpot API Data:", response.data)
+
+    // Deconstruct the two endpoint arrays
+    const { existingAssociations, newAssociations } = data
+
+    console.log(existingAssociations)
+    console.log(newAssociations)
   } catch (error) {
     console.error("Error fetching data from HubSpot API:", error)
   }
